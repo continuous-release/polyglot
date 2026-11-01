@@ -1,0 +1,127 @@
+name: ci
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: polyglot-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    name: contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+
+      - name: Check generated contract files
+        run: node scripts/codegen.mjs --check
+
+      - name: TypeScript tests
+        run: npm --prefix ts test
+
+      - name: Python tests
+        run: PYTHONPATH=python/src python3 -m unittest discover -s python/tests
+
+      - name: Rust tests
+        run: cargo test --offline --manifest-path rust/Cargo.toml
+
+  adapters:
+    name: adapter ${{ matrix.adapter }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        adapter: [nx, bazel, buck2, nix]
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+
+      - name: Setup Bazel
+        if: matrix.adapter == 'bazel'
+        run: |
+          set -euo pipefail
+          curl -fsSL -o "$RUNNER_TEMP/bazel" \
+            https://github.com/bazelbuild/bazelisk/releases/download/v1.30.0/bazelisk-linux-amd64
+          chmod +x "$RUNNER_TEMP/bazel"
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+
+      - name: Setup Buck2
+        if: matrix.adapter == 'buck2'
+        run: |
+          set -euo pipefail
+          curl -fsSL -o "$RUNNER_TEMP/buck2.zst" \
+            https://github.com/facebook/buck2/releases/download/2026-10-15/buck2-x86_64-unknown-linux-musl.zst
+          zstd -d "$RUNNER_TEMP/buck2.zst" -o "$RUNNER_TEMP/buck2"
+          chmod +x "$RUNNER_TEMP/buck2"
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+
+      - name: Setup Nix
+        if: matrix.adapter == 'nix'
+        uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # v31
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
+      - name: Build with Nx
+        if: matrix.adapter == 'nx'
+        run: |
+          set -euo pipefail
+          npm ci
+          rm -rf dist
+          RELEASE_VERSION=0.1.0 npx nx run polyglot:finalize --skip-nx-cache
+
+      - name: Build with Bazel
+        if: matrix.adapter == 'bazel'
+        env:
+          RELEASE_VERSION: 0.1.0
+        run: |
+          set -euo pipefail
+          bazel build //:verify --noshow_progress
+          mkdir -p dist
+          cp bazel-bin/polyglot dist/polyglot
+          cp bazel-bin/dist/polyglot.tgz dist/
+          cp bazel-bin/dist/polyglot.whl dist/
+          cp bazel-bin/dist/manifest.json dist/
+
+      - name: Build with Buck2
+        if: matrix.adapter == 'buck2'
+        run: |
+          set -euo pipefail
+          buck2 build //:release -c release.version=0.1.0
+          out="$(buck2 targets --show-output //:release -c release.version=0.1.0 | awk '{print $2}')"
+          mkdir -p dist
+          cp -L "$out"/* dist/
+
+      - name: Build with Nix
+        if: matrix.adapter == 'nix'
+        run: |
+          set -euo pipefail
+          nix build .#release --print-build-logs
+          mkdir -p dist
+          cp -L result/* dist/
+
+      - name: Verify the manifest and artifacts
+        run: |
+          set -euo pipefail
+          if [ "${{ matrix.adapter }}" = "nix" ]; then
+            # The Nix artifact links against the Nix store's glibc; the Nix
+            # build already ran the binary inside the sandbox. Verify its hash
+            # and package metadata here without executing it on Ubuntu.
+            node scripts/verify.mjs --dist dist --skip-rust-run
+          else
+            node scripts/verify.mjs --dist dist
+          fi
