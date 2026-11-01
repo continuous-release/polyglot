@@ -48,9 +48,9 @@ try {
   fs.chmodSync(rustBinary, 0o755);
 }
 if (!process.argv.includes("--skip-rust-run")) {
-  const rustOutput = execFileSync(rustBinary, {
-    env: { ...process.env, RELEASE_VERSION: manifest.version },
-  }).toString().trim();
+  const env = { ...process.env };
+  delete env.RELEASE_VERSION;
+  const rustOutput = execFileSync(rustBinary, { env }).toString().trim();
   if (rustOutput !== expected) {
     fail(`rust binary printed "${rustOutput}", expected "${expected}"`);
   }

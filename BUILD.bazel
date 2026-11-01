@@ -1,5 +1,13 @@
 load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_library", "rust_test")
 
+# rustc actions do not inherit --action_env, so pass the release version through
+# a generated env file. The genrule does see --action_env=RELEASE_VERSION.
+genrule(
+    name = "version_env",
+    outs = ["version.env"],
+    cmd = "echo RELEASE_VERSION=$$RELEASE_VERSION > $@",
+)
+
 rust_library(
     name = "polyglot_lib",
     srcs = [
@@ -10,6 +18,7 @@ rust_library(
     crate_name = "polyglot",
     crate_root = "rust/src/lib.rs",
     edition = "2021",
+    rustc_env_files = [":version_env"],
 )
 
 rust_binary(
