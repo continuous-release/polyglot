@@ -1,9 +1,13 @@
 {
   description = "polyglot — one source tree, four build-system adapters";
 
-  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    rust-overlay.url = "github:oxalica/rust-overlay";
+    rust-overlay.inputs.nixpkgs.follows = "nixpkgs";
+  };
 
-  outputs = { self, nixpkgs }:
+  outputs = { self, nixpkgs, rust-overlay }:
     let
       systems = [ "x86_64-linux" "aarch64-linux" ];
       forAllSystems = f: nixpkgs.lib.genAttrs systems (system: f nixpkgs.legacyPackages.${system});
@@ -12,6 +16,10 @@
       packages = forAllSystems (pkgs:
         let
           python = pkgs.python3.withPackages (ps: [ ps.pip ps.setuptools ps.wheel ]);
+          rust = (pkgs.extend rust-overlay.overlays.default).rust-bin.stable.latest.default.override {
+            targets = [ "x86_64-unknown-linux-musl" ];
+          };
+          muslCc = pkgs.pkgsMusl.stdenv.cc;
           src = pkgs.lib.cleanSourceWith {
             src = ./.;
             filter = path: type:
@@ -25,8 +33,8 @@
 
             nativeBuildInputs = [
               pkgs.nodejs
-              pkgs.cargo
-              pkgs.rustc
+              rust
+              muslCc
               python
               pkgs.unzip
             ];
@@ -41,6 +49,9 @@
               export CARGO_HOME=$TMPDIR/cargo
               export npm_config_cache=$TMPDIR/npm
               export POLYGLOT_OFFLINE=1
+              export POLYGLOT_RUST_TARGET=x86_64-unknown-linux-musl
+              export CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=${muslCc}/bin/cc
+              export CC_x86_64_unknown_linux_musl=${muslCc}/bin/cc
               export RELEASE_VERSION=${version}
               bash scripts/build-release.sh
             '';

@@ -115,13 +115,4 @@ jobs:
           cp -L result/* dist/
 
       - name: Verify the manifest and artifacts
-        run: |
-          set -euo pipefail
-          if [ "${{ matrix.adapter }}" = "nix" ]; then
-            # The Nix artifact links against the Nix store's glibc; the Nix
-            # build already ran the binary inside the sandbox. Verify its hash
-            # and package metadata here without executing it on Ubuntu.
-            node scripts/verify.mjs --dist dist --skip-rust-run
-          else
-            node scripts/verify.mjs --dist dist
-          fi
+        run: node scripts/verify.mjs --dist dist

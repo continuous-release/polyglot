@@ -21,7 +21,7 @@ npm package version, and reads the wheel metadata.
 
 | Adapter | Entry point | What it exercises |
 | --- | --- | --- |
-| Nix | `nix build .#release` | Hermetic multi-language build |
+| Nix | `nix build .#release` | Hermetic multi-language build with a static musl Rust binary |
 | Bazel | `bazel build //:verify` | Explicit Rust target + generated-artifact graph |
 | Buck2 | `buck2 build //:release -c release.version=...` | Config-driven version + genrules |
 | Nx | `npx nx run polyglot:finalize` | Task graph, affected builds, local cache |
@@ -31,10 +31,10 @@ runner's `cargo` and Python, so the released Rust binary links against the
 runner's glibc and runs in the release-verify job and on normal Linux hosts.
 The CI matrix runs all four adapters and verifies the same manifest in each.
 
-Nix remains the hermetic comparison. Its Rust binary links against the Nix
-store, so the Nix CI job verifies the manifest, hashes, and package metadata
-without executing that binary on Ubuntu. Making the Nix artifact portable is a
-separate follow-up (static or musl target).
+Nix is the hermetic comparison and now builds the Rust binary for
+`x86_64-unknown-linux-musl` with a pinned rust-overlay toolchain, producing a
+static-pie artifact. The Nix CI job executes it on Ubuntu just like the other
+adapters.
 
 ## Local
 
