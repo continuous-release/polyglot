@@ -5,8 +5,8 @@ pub fn message() -> &'static str {
     contract::MESSAGE
 }
 
-pub fn version() -> String {
-    std::env::var("RELEASE_VERSION").unwrap_or_else(|_| version::FALLBACK.to_string())
+pub fn version() -> &'static str {
+    version::VERSION
 }
 
 pub fn describe() -> String {

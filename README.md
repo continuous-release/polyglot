@@ -46,8 +46,8 @@ RELEASE_VERSION=0.1.0 npx nx run polyglot:finalize
 # Fast path without Nx
 RELEASE_VERSION=0.1.0 bash scripts/build-release.sh
 
-# Nix
-RELEASE_VERSION=0.1.0 nix build .#release --print-build-logs
+# Nix (version comes from version.txt)
+nix build .#release --print-build-logs
 
 # Bazel
 RELEASE_VERSION=0.1.0 bazel build //:verify
@@ -58,9 +58,11 @@ buck2 build //:release -c release.version=0.1.0
 
 ## Version
 
-The version comes from `RELEASE_VERSION`, falling back to `version.txt`. The
-release workflow passes the reserved version as `RELEASE_VERSION`.
-`manifest.json` is authoritative; `verify.mjs` checks every artifact against it.
+The release version comes from `RELEASE_VERSION`, falling back to `version.txt`;
+Nix reads `version.txt` directly. Every adapter embeds the version in the Rust
+binary at compile time, and `verify.mjs` runs the binary without
+`RELEASE_VERSION` so the artifact must report its own version. `manifest.json`
+is authoritative; `verify.mjs` checks every artifact against it.
 
 ## Why the generated files are committed
 

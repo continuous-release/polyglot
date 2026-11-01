@@ -14,6 +14,7 @@ rust_library(
     crate = "polyglot",
     crate_root = "rust/src/lib.rs",
     edition = "2021",
+    env = {"RELEASE_VERSION": version},
 )
 
 rust_binary(
